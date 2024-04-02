@@ -49,10 +49,10 @@ Future<String?> saveFileDesktop({
   String? suggestedFileName,
 }) async {
   return (parseExtension(fileExtension) == null)
-      ? getSavePath(suggestedName: suggestedFileName, acceptedTypeGroups: [
+      ? (await getSaveLocation(suggestedName: suggestedFileName, acceptedTypeGroups: [
           XTypeGroup(label: 'images', extensions: parseExtension(fileExtension))
-        ])
-      : getSavePath(
+        ]))?.path
+      : (await getSaveLocation(
           suggestedName: suggestedFileName,
-        );
+        ))?.path;
 }
