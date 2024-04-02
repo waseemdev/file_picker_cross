@@ -1,0 +1,77 @@
+stages:
+  - coverage
+  - deploy
+  - publish
+
+workflow:
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+code_analyze:
+  stage: coverage
+  image: cirrusci/flutter
+  dependencies: []
+  script:
+    - flutter pub get
+    - flutter format lib test example --set-exit-if-changed
+    - flutter analyze
+    - flutter pub run import_sorter:main --no-comments --exit-if-changed
+
+
+# dart_test:
+#   stage: coverage
+#   image: cirrusci/flutter
+#   dependencies: [
+#       code_analyze
+#   ]
+#   before_script:
+#     - apt update -qq && apt install firefox-esr -y -qq
+#   script:
+#     - flutter pub get
+#     - flutter test || true # tests fail because of headless CI atm.
+
+code_quality:
+  stage: coverage
+  image: cirrusci/flutter
+  before_script:
+    - flutter pub global activate dart_code_metrics
+  script:
+    - flutter pub global run dart_code_metrics:metrics analyze lib -r gitlab > code-quality-report.json
+  artifacts:
+    reports:
+      codequality: code-quality-report.json
+    # also create an actual artifact for inspection purposes
+    paths:
+      - code-quality-report.json
+
+dry-run:
+  stage: publish
+  image: cirrusci/flutter
+  script:
+    - rm -rf ./docs
+    - flutter pub get
+    - flutter pub publish --dry-run
+
+pub-dev:
+  stage: publish
+  image: cirrusci/flutter
+  dependencies: [
+      dry-run
+  ]
+  script:
+    - rm -rf ./docs
+    - |
+      if [ -z "${PUB_DEV_CREDENTIALS}" ]; then
+        echo "Missing PUB_DEV_CREDENTIALS environment variable"
+        exit 1
+      fi
+
+      mkdir -p /root/.pub-cache
+      cp "${PUB_DEV_CREDENTIALS}" ~/.pub-cache/credentials.json
+
+    - flutter pub get
+    - flutter pub publish --force
+  rules:
+    - if: $CI_COMMIT_TAG
